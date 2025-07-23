@@ -32,34 +32,40 @@ class SchedulerService {
     const now = new Date();
     const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     for (const or of rooms) {
-      // Calculate duration for this room
-      const durationHours = surgeryService.getSurgeryDuration(surgeryType, or);
-      let searchStart = now;
-      const sortedSchedules = [...or.schedules].sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime());
-      for (let i = 0; i <= sortedSchedules.length; i++) {
-        let slotStart: Date;
-        let slotEnd: Date;
-        if (i === 0) {
-          slotStart = searchStart;
-        } else {
-          slotStart = new Date(sortedSchedules[i - 1]?.endTime ?? 0);
-        }
-        slotEnd = new Date(slotStart.getTime() + durationHours * 60 * 60 * 1000);
-        // Check working hours
-        if (!isWithinWorkingHours(slotStart) || !isWithinWorkingHours(slotEnd)) {
-          slotStart = getNextWorkingDayStart(slotStart);
+      if (!acquireLock(or.id)) {
+        continue; // Room is locked, skip
+      }
+      try {
+        const durationHours = surgeryService.getSurgeryDuration(surgeryType, or);
+        let searchStart = now;
+        const sortedSchedules = [...or.schedules].sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime());
+        for (let i = 0; i <= sortedSchedules.length; i++) {
+          let slotStart: Date;
+          let slotEnd: Date;
+          if (i === 0) {
+            slotStart = searchStart;
+          } else {
+            slotStart = new Date(sortedSchedules[i - 1]?.endTime ?? 0);
+          }
           slotEnd = new Date(slotStart.getTime() + durationHours * 60 * 60 * 1000);
+          // Check working hours
+          if (!isWithinWorkingHours(slotStart) || !isWithinWorkingHours(slotEnd)) {
+            slotStart = getNextWorkingDayStart(slotStart);
+            slotEnd = new Date(slotStart.getTime() + durationHours * 60 * 60 * 1000);
+          }
+          // Enforce 1-week scheduling window
+          if (slotStart > oneWeekFromNow) {
+            break;
+          }
+          // Check for overlap with next schedule
+          if (i < sortedSchedules.length && slotEnd > new Date(sortedSchedules[i]?.startTime ?? 0)) {
+            continue;
+          }
+          // Found a slot within 1 week
+          return { operatingRoom: or, startTime: slotStart, endTime: slotEnd };
         }
-        // Enforce 1-week scheduling window
-        if (slotStart > oneWeekFromNow) {
-          break;
-        }
-        // Check for overlap with next schedule
-        if (i < sortedSchedules.length && slotEnd > new Date(sortedSchedules[i]?.startTime ?? 0)) {
-          continue;
-        }
-        // Found a slot within 1 week
-        return { operatingRoom: or, startTime: slotStart, endTime: slotEnd };
+      } finally {
+        releaseLock(or.id);
       }
     }
     return null;
