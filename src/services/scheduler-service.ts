@@ -71,6 +71,21 @@ class SchedulerService {
     return null;
   }
 
+  /**
+   * Find the next available date for a given room and surgery type (to be implemented)
+   */
+  findNextAvailableSlotForRoom(
+    or: OperatingRoom,
+    surgeryType: SurgeryType,
+  ): {
+    operatingRoom: OperatingRoom;
+    startTime: Date;
+    endTime: Date;
+  } | null {
+    // TODO: Implement logic to find the next available date for this room
+    return null;
+  }
+
   processQueue(): { processed: number; scheduled: Schedule[] } {
     let processed = 0;
     const scheduled: Schedule[] = [];
